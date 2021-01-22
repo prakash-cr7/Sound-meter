@@ -1,131 +1,91 @@
-import 'package:fl_chart/fl_chart.dart';
-import 'package:flutter/material.dart';
+import 'dart:async';
 
-class LineChartSample2 extends StatefulWidget {
+import 'package:decibel_meter/provider/provider.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:syncfusion_flutter_charts/charts.dart';
+
+class SfChart extends StatefulWidget {
   @override
-  _LineChartSample2State createState() => _LineChartSample2State();
+  _SfChartState createState() => _SfChartState();
 }
 
-class _LineChartSample2State extends State<LineChartSample2> {
-  List<Color> gradientColors = [
-    const Color(0xff23b6e6),
-    const Color(0xff02d39a),
-  ];
+class _SfChartState extends State<SfChart> {
+  _SfChartState() {
+    timer = Timer.periodic(Duration(milliseconds: 250), updateData);
+  }
+
+  Timer timer;
+  ChartSeriesController _chartSeriesController;
+  int count = 0;
+  List<ChartData> _chartData = [];
+
+  @override
+  void initState() {
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 300,
-      width: double.infinity,
-      decoration: const BoxDecoration(
-          borderRadius: BorderRadius.all(
-            Radius.circular(18),
-          ),
-          color: Color(0x00232d37)),
-      child: Padding(
-        padding:
-            const EdgeInsets.only(right: 2.0, left: 2.0, top: 24, bottom: 12),
-        child: LineChart(
-          mainData(),
-        ),
-      ),
-    );
+    return _getLiveLineChart();
   }
 
-  LineChartData mainData() {
-    return LineChartData(
-      gridData: FlGridData(
-        show: false,
-        drawVerticalLine: false,
-        getDrawingHorizontalLine: (value) {
-          return FlLine(
-            color: const Color(0xff37434d),
-            strokeWidth: 1,
-          );
-        },
-        getDrawingVerticalLine: (value) {
-          return FlLine(
-            color: const Color(0xff37434d),
-            strokeWidth: 1,
-          );
-        },
-      ),
-      titlesData: FlTitlesData(
-        show: true,
-        bottomTitles: SideTitles(
-          showTitles: true,
-          reservedSize: 22,
-          getTextStyles: (value) => const TextStyle(
-              color: Color(0xff68737d),
-              fontWeight: FontWeight.bold,
-              fontSize: 16),
-          getTitles: (value) {
-            switch (value.toInt()) {
-              case 1:
-                return 'MAR';
-              case 5:
-                return 'JUN';
-              case 10:
-                return 'SEP';
-            }
-            return '';
-          },
-          margin: 8,
-        ),
-        leftTitles: SideTitles(
-          showTitles: true,
-          getTextStyles: (value) => const TextStyle(
-            color: Color(0xff67727d),
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-          ),
-          getTitles: (value) {
-            switch (value.toInt()) {
-              case 1:
-                return '10k';
-              case 3:
-                return '30k';
-              case 5:
-                return '50k';
-            }
-            return '';
-          },
-          reservedSize: 28,
-          margin: 12,
-        ),
-      ),
-      borderData: FlBorderData(
-          show: false,
-          border: Border.all(color: const Color(0xff37434d), width: 1)),
-      minX: 0,
-      maxX: 11,
-      minY: 0,
-      maxY: 6,
-      lineBarsData: [
-        LineChartBarData(
-          spots: [
-            FlSpot(0, 3),
-            FlSpot(2.6, 2),
-            FlSpot(4.9, 5),
-            FlSpot(6.8, 3.1),
-            FlSpot(8, 4),
-            FlSpot(9.5, 3),
-            FlSpot(11, 6),
-          ],
-          isCurved: true,
-          colors: gradientColors,
-          barWidth: 2,
-          isStrokeCapRound: true,
-          dotData: FlDotData(
-            show: false,
-          ),
-          belowBarData: BarAreaData(
-            show: true,
-            colors:
-                gradientColors.map((color) => color.withOpacity(0.3)).toList(),
-          ),
-        ),
-      ],
-    );
+  SfCartesianChart _getLiveLineChart() {
+    return SfCartesianChart(
+        plotAreaBorderWidth: 0,
+        primaryXAxis: NumericAxis(
+            interval: 15,
+            desiredIntervals: 6,
+            visibleMinimum: count < 90 ? 0 : (count - 90).toDouble(),
+            visibleMaximum: count < 90 ? 90 : (count).toDouble(),
+            majorGridLines: MajorGridLines(width: 1),
+            axisLine: AxisLine(width: 0),
+            labelStyle: TextStyle(color: Colors.lightBlue)),
+        primaryYAxis: NumericAxis(
+            maximum: 100.0,
+            visibleMinimum: 0,
+            visibleMaximum: 100,
+            axisLine: AxisLine(width: 0),
+            labelStyle: TextStyle(color: Colors.lightBlue)),
+        series: <LineSeries<ChartData, int>>[
+          LineSeries<ChartData, int>(
+            onRendererCreated: (ChartSeriesController controller) {
+              _chartSeriesController = controller;
+            },
+            dataSource: _chartData,
+            color: const Color.fromRGBO(192, 108, 132, 1),
+            xValueMapper: (ChartData sales, _) => sales.time,
+            yValueMapper: (ChartData sales, _) => sales.decibel,
+          )
+        ]);
   }
+
+  void updateData(Timer timer) {
+    if (!Provider.of<MicData>(context, listen: false).isRecording)
+      return;
+    else if (_chartData.length >= 90) {
+      _chartData.add(
+          ChartData(count, Provider.of<MicData>(context, listen: false).dB));
+      _chartData.removeAt(0);
+      _chartSeriesController.updateDataSource(
+        addedDataIndexes: <int>[_chartData.length - 1],
+        removedDataIndexes: <int>[0],
+      );
+    } else {
+      _chartData.add(
+          ChartData(count, Provider.of<MicData>(context, listen: false).dB));
+      // _chartSeriesController.updateDataSource(
+      //   addedDataIndexes: <int>[_chartData.length - 1],
+      // );
+      //// there is a weired error in graph when uncommented above lines.
+      //// dunno why.
+    }
+    count++;
+  }
+}
+
+class ChartData {
+  ChartData(this.time, this.decibel);
+  final num time;
+  final num decibel;
 }
