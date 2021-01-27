@@ -61,6 +61,11 @@ class _SfChartState extends State<SfChart> {
   }
 
   void updateData(Timer timer) {
+    if (Provider.of<MicData>(context, listen: false).doReset) {
+      _chartData = [];
+      count = 0;
+      Provider.of<MicData>(context, listen: false).toggleResetCall();
+    }
     if (!Provider.of<MicData>(context, listen: false).isRecording)
       return;
     else if (_chartData.length >= 90) {
@@ -80,6 +85,7 @@ class _SfChartState extends State<SfChart> {
       //// there is a weired error in graph when uncommented above lines.
       //// dunno why.
     }
+    Provider.of<MicData>(context, listen: false).calculateMinMaxAvg(_chartData);
     count++;
   }
 }

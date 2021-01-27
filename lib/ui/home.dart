@@ -1,9 +1,12 @@
 import 'dart:async';
 
+import 'package:decibel_meter/provider/noise_levels.dart';
 import 'package:decibel_meter/provider/provider.dart';
 import 'package:decibel_meter/ui/widgets/realtime_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -15,16 +18,35 @@ class _HomeScreenState extends State<HomeScreen> {
     timer = Timer.periodic(Duration(milliseconds: 500), getdB);
   }
 
-  Color bgColor = Colors.black;
+  SharedPreferences sharedPreferences;
+  Color bgColor;
   bool switchStatus = true;
   Timer timer;
   int dB = 0;
+  int calibration = 0;
+
+  void initSp() async {
+    sharedPreferences = await SharedPreferences.getInstance();
+    getSwitch();
+  }
+
+  void getSwitch() {
+    bool s = sharedPreferences.getBool('switchStatus');
+    if (s != null) {
+      switchStatus = s;
+    } else
+      switchStatus = true;
+    switchStatus ? bgColor = Colors.black : bgColor = Colors.white;
+    setState(() {});
+  }
+
   void getdB(Timer timer) {
     dB = Provider.of<MicData>(context, listen: false).dB;
   }
 
   @override
   void initState() {
+    initSp();
     Provider.of<MicData>(context, listen: false).initNoiseMeter();
     super.initState();
   }
@@ -67,7 +89,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   height: height * 0.02,
                 ),
                 Text(
-                  'Normal conversation',
+                  noiseLabel(dB),
                   style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
@@ -82,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'MIN = 34',
+                        'MIN = ${Provider.of<MicData>(context, listen: false).minimum}',
                         style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.w500,
@@ -92,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         width: width * 0.05,
                       ),
                       Text(
-                        'AVG = 58',
+                        'AVG = ${Provider.of<MicData>(context, listen: false).average}',
                         style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.w500,
@@ -102,7 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         width: width * 0.05,
                       ),
                       Text(
-                        'MAX = 84',
+                        'MAX = ${Provider.of<MicData>(context, listen: false).maximum}',
                         style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.w500,
@@ -128,7 +150,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           size: 30,
                         ),
                         backgroundColor: Colors.grey[700],
-                        onPressed: null),
+                        tooltip: 'Calibration',
+                        onPressed: () {
+                          HapticFeedback.vibrate();
+                          calibrationAlert(context, bgColor, () {
+                            Provider.of<MicData>(context, listen: false)
+                                .calibrate(calibration);
+                            Navigator.pop(context);
+                          });
+                        }),
                     SizedBox(width: width * 0.06),
                     FloatingActionButton(
                         child: Icon(
@@ -144,6 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ? Colors.red
                                 : Color(0xff02d39a),
                         onPressed: () {
+                          HapticFeedback.vibrate();
                           Provider.of<MicData>(context, listen: false)
                                   .isRecording
                               ? Provider.of<MicData>(context, listen: false)
@@ -153,14 +184,17 @@ class _HomeScreenState extends State<HomeScreen> {
                         }),
                     SizedBox(width: width * 0.06),
                     FloatingActionButton(
-                      child: Icon(
-                        Icons.refresh,
-                        color: Colors.white,
-                        size: 30,
-                      ),
-                      backgroundColor: Colors.grey[700],
-                      onPressed: null,
-                    ),
+                        child: Icon(
+                          Icons.refresh,
+                          color: Colors.white,
+                          size: 30,
+                        ),
+                        backgroundColor: Colors.grey[700],
+                        onPressed: () {
+                          HapticFeedback.vibrate();
+                          Provider.of<MicData>(context, listen: false)
+                              .toggleResetCall();
+                        }),
                   ],
                 )
               ],
@@ -178,10 +212,74 @@ class _HomeScreenState extends State<HomeScreen> {
                   value == true
                       ? bgColor = Colors.black
                       : bgColor = Colors.white;
+                  sharedPreferences.setBool('switchStatus', value);
                 },
               ))
         ],
       ),
     );
+  }
+
+  Future<Widget> calibrationAlert(
+      BuildContext _, Color bgColor, Function onPressed) {
+    return showDialog(
+        context: _,
+        builder: (_) {
+          return StatefulBuilder(builder: (_, setState) {
+            return AlertDialog(
+              backgroundColor: bgColor,
+              title: Text(
+                'Calibration',
+                style: TextStyle(color: Colors.lightBlue),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    calibration.toString(),
+                    style: TextStyle(color: Colors.lightBlue, fontSize: 65),
+                  ),
+                  SliderTheme(
+                    data: SliderThemeData(
+                        activeTrackColor: Colors.lightBlue,
+                        inactiveTrackColor: Colors.grey,
+                        thumbColor: Colors.blue,
+                        trackHeight: 05,
+                        thumbShape:
+                            RoundSliderThumbShape(disabledThumbRadius: 10),
+                        overlayShape:
+                            RoundSliderOverlayShape(overlayRadius: 20),
+                        overlayColor: Colors.lightBlue[200]),
+                    child: Slider(
+                      min: -20,
+                      max: 20,
+                      value: calibration.toDouble(),
+                      onChanged: (double number) {
+                        calibration = number.round();
+                        setState(() {});
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () {
+                      Navigator.pop(_);
+                    },
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(color: Colors.lightBlue),
+                    )),
+                TextButton(
+                    onPressed: onPressed,
+                    child: Text(
+                      'Confirm',
+                      style: TextStyle(color: Colors.lightBlue),
+                    ))
+              ],
+            );
+          });
+        });
   }
 }
