@@ -31,6 +31,7 @@ class MicData extends ChangeNotifier {
       dbList.add(data.decibel);
       avg += data.decibel;
     }
+    //min and max calculation can be more efficient.
     if (dbList.isNotEmpty) {
       average = (avg ~/ dbList.length);
       minimum = dbList.reduce(min);
